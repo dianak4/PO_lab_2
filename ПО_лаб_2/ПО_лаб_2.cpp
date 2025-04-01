@@ -5,9 +5,12 @@
 #include <chrono>
 #include <atomic>
 
-const int NUM_THREADS = 4;
+const std::vector<int> NUM_THREADS = { 4, 8, 16, 32, 64, 128, 320 };
 int SIZE;
 std::vector<int> data;
+std::mutex mtx;
+std::atomic<int> atomic_sum(0);
+std::atomic<int> atomic_min(INT_MAX);
 
 void generate_data() {
     data.resize(SIZE);
@@ -31,7 +34,6 @@ void sequential(int& sum, int& min_value) {
 }
 
 // Варіант з м’ютексом
-std::mutex mtx;
 void mutex_version(int& sum, int& min_value, int start, int end) {
     int local_sum = 0;
     int local_min = INT_MAX;
@@ -51,8 +53,6 @@ void mutex_version(int& sum, int& min_value, int start, int end) {
 }
 
 // Варіант з CAS (cmpxchg)
-std::atomic<int> atomic_sum(0);
-std::atomic<int> atomic_min(INT_MAX);
 void cas_version(int start, int end) {
     int local_sum = 0;
     int local_min = INT_MAX;
@@ -79,32 +79,42 @@ int main() {
     sequential(sum, min_value);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Sequential: Sum = " << sum << ", Min = " << min_value
-        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
+        << ", Time = " << std::chrono::duration<double>(end - start).count() << " seconds\n";
+
+    std::cout << "\n" << std::endl;
 
     // Версія з м’ютексом
     sum = 0, min_value = INT_MAX;
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<std::thread> threads;
-    int chunk_size = SIZE / NUM_THREADS;
-    for (int i = 0; i < NUM_THREADS; ++i) {
-        threads.emplace_back(mutex_version, std::ref(sum), std::ref(min_value), i * chunk_size, (i + 1) * chunk_size);
+    for (int num_threads : NUM_THREADS) {
+        start = std::chrono::high_resolution_clock::now();
+        std::vector<std::thread> threads;
+        int chunk_size = SIZE / num_threads;
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back(mutex_version, std::ref(sum), std::ref(min_value), i * chunk_size, (i + 1) * chunk_size);
+        }
+        for (auto& t : threads) t.join();
+        end = std::chrono::high_resolution_clock::now();
+        std::cout << "Mutex \t|" << num_threads << " threads|: \tSum = " << sum << ", \tMin = " << min_value
+            << ", Time = " << std::chrono::duration<double>(end - start).count() << " seconds\n";
     }
-    for (auto& t : threads) t.join();
-    end = std::chrono::high_resolution_clock::now();
-    std::cout << "Mutex: Sum = " << sum << ", Min = " << min_value
-        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
+
+	std::cout << "\n" << std::endl;
 
     // Версія з CAS (cmpxchg)
     atomic_sum = 0;
     atomic_min = INT_MAX;
-    start = std::chrono::high_resolution_clock::now();
-    threads.clear();
-    for (int i = 0; i < NUM_THREADS; ++i) {
-        threads.emplace_back(cas_version, i * chunk_size, (i + 1) * chunk_size);
+    for (int num_threads : NUM_THREADS) {
+        start = std::chrono::high_resolution_clock::now();
+        std::vector<std::thread> threads;
+        int chunk_size = SIZE / num_threads;
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back(cas_version, i * chunk_size, (i + 1) * chunk_size);
+        }
+        for (auto& t : threads) t.join();
+        end = std::chrono::high_resolution_clock::now();
+        std::cout << "CAS \t|" << num_threads << " threads|: \tSum = " << atomic_sum.load() << ", \tMin = " << atomic_min.load()
+            << ", Time = " << std::chrono::duration<double>(end - start).count() << " seconds\n";
     }
-    for (auto& t : threads) t.join();
-    end = std::chrono::high_resolution_clock::now();
-    std::cout << "CAS: Sum = " << atomic_sum.load() << ", Min = " << atomic_min.load()
-        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
+
     return 0;
 }
