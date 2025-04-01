@@ -5,10 +5,12 @@
 #include <chrono>
 #include <atomic>
 
-const int SIZE = 10000000;
-std::vector<int> data(SIZE);
+const int NUM_THREADS = 4;
+int SIZE;
+std::vector<int> data;
 
 void generate_data() {
+    data.resize(SIZE);
     for (int i = 0; i < SIZE; ++i) {
         data[i] = rand() % 10000;  // Генеруємо випадкові числа від 0 до 9999
     }
@@ -68,35 +70,41 @@ void cas_version(int start, int end) {
 }
 
 int main() {
+    std::cout << "Enter the size of the dataset: ";
+    std::cin >> SIZE;
     generate_data();
+
     int sum, min_value;
     auto start = std::chrono::high_resolution_clock::now();
     sequential(sum, min_value);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Sequential: Sum = " << sum << ", Min = " << min_value
-        << ", Time = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms\n";
+        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
 
     // Версія з м’ютексом
     sum = 0, min_value = INT_MAX;
     start = std::chrono::high_resolution_clock::now();
-    std::thread t1(mutex_version, std::ref(sum), std::ref(min_value), 0, SIZE / 2);
-    std::thread t2(mutex_version, std::ref(sum), std::ref(min_value), SIZE / 2, SIZE);
-    t1.join();
-    t2.join();
+    std::vector<std::thread> threads;
+    int chunk_size = SIZE / NUM_THREADS;
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        threads.emplace_back(mutex_version, std::ref(sum), std::ref(min_value), i * chunk_size, (i + 1) * chunk_size);
+    }
+    for (auto& t : threads) t.join();
     end = std::chrono::high_resolution_clock::now();
     std::cout << "Mutex: Sum = " << sum << ", Min = " << min_value
-        << ", Time = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms\n";
+        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
 
     // Версія з CAS (cmpxchg)
     atomic_sum = 0;
     atomic_min = INT_MAX;
     start = std::chrono::high_resolution_clock::now();
-    std::thread t3(cas_version, 0, SIZE / 2);
-    std::thread t4(cas_version, SIZE / 2, SIZE);
-    t3.join();
-    t4.join();
+    threads.clear();
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        threads.emplace_back(cas_version, i * chunk_size, (i + 1) * chunk_size);
+    }
+    for (auto& t : threads) t.join();
     end = std::chrono::high_resolution_clock::now();
     std::cout << "CAS: Sum = " << atomic_sum.load() << ", Min = " << atomic_min.load()
-        << ", Time = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms\n";
+        << ", Time = " << std::chrono::duration<double>(end - start).count() << " ms\n";
     return 0;
 }
