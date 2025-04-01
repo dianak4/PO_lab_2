@@ -94,7 +94,7 @@ int main() {
         }
         for (auto& t : threads) t.join();
         end = std::chrono::high_resolution_clock::now();
-        std::cout << "Mutex \t|" << num_threads << " threads|: \tSum = " << sum << ", \tMin = " << min_value
+        std::cout << "Mutex \t|" << num_threads << " threads|: \tSum = " << sum << ", Min = " << min_value
             << ", Time = " << std::chrono::duration<double>(end - start).count() << " seconds\n";
     }
 
@@ -112,7 +112,7 @@ int main() {
         }
         for (auto& t : threads) t.join();
         end = std::chrono::high_resolution_clock::now();
-        std::cout << "CAS \t|" << num_threads << " threads|: \tSum = " << atomic_sum.load() << ", \tMin = " << atomic_min.load()
+        std::cout << "CAS \t|" << num_threads << " threads|: \tSum = " << atomic_sum.load() << ", Min = " << atomic_min.load()
             << ", Time = " << std::chrono::duration<double>(end - start).count() << " seconds\n";
     }
 
