@@ -66,7 +66,7 @@ void cas_version(int start, int end) {
             }
         }
     }
-    atomic_sum.fetch_add(local_sum, memory_order_relaxed); // кожен потік додає свою суму в глобальну
+    atomic_sum.fetch_add(local_sum, memory_order_relaxed); // кожен потік додає свою суму в глобальну. не залежить від порядку
     int old_min = atomic_min.load(); //  копія старого мінімуму з пам'яті
     while (local_min < old_min && !atomic_min.compare_exchange_weak(old_min, local_min)); //if atomic_min = old_min -> local_min else: refresh old_min 
 }
@@ -94,7 +94,7 @@ int main() {
         int chunk_size = SIZE / num_threads;
         for (int i = 0; i < num_threads; ++i) {
             int start_idx = i * chunk_size;
-            int end_idx = (i == num_threads - 1) ? SIZE : (i + 1) * chunk_size;
+			int end_idx = (i == num_threads - 1) ? SIZE : (i + 1) * chunk_size; // останній потік обробляє залишок
             threads.emplace_back(mutex_version, ref(sum), ref(min_value), start_idx, end_idx);
         }
         for (auto& t : threads) t.join();
@@ -105,7 +105,7 @@ int main() {
 
 	cout << "\n" << endl;
 
-    // Версія з CAS (cmpxchg)
+    // Версія з CAS
     
     for (int num_threads : NUM_THREADS) {
         atomic_sum = 0, atomic_min = INT_MAX;
